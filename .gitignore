@@ -1,0 +1,33 @@
+# Data: raw IMDb files and derived files are never committed (license + size).
+# The repo ships scripts/download_data.py instead.
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+*.duckdb
+*.duckdb.wal
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local secrets (MySQL credentials)
+.env
+
+# Row-level Power BI exports contain IMDb-derived data: regenerate with scripts/build_outputs.py
+outputs/powerbi/dim_*.csv
+outputs/powerbi/bridge_*.csv
+outputs/powerbi/fact_*.csv
+
+# Power BI file embeds IMDb-derived data: share screenshots/PDF instead
+*.pbix

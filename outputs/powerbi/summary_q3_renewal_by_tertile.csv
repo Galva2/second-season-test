@@ -1,0 +1,7 @@
+﻿signal_name,tertile,n_series,min_change,max_change,pct_got_season_3
+audience (vote change),1,1267,-0.976,-0.302,44.0
+audience (vote change),2,1267,-0.302,-0.189,71.7
+audience (vote change),3,1267,-0.189,8.301,72.9
+quality (rating change),1,1267,-3.503,-0.05,58.6
+quality (rating change),2,1267,-0.05,0.185,68.3
+quality (rating change),3,1267,0.186,3.23,61.7
