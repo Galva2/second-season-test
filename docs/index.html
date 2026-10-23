@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Second Season Test</title>
+<meta name="description" content="When do TV series lose their audience, and what should a streaming platform watch before renewing one? A SQL and Power BI case study on 12.9M IMDb records.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --canvas: #F4F5F7;     /* page background, like the Power BI canvas */
+    --surface: #FFFFFF;    /* cards and charts */
+    --ink: #1F2328;
+    --ink-2: #5B6470;
+    --hairline: #E3E6EA;
+    --blue: #118DFF;       /* audience: same blue as the dashboard */
+    --orange: #E66C37;     /* quality: same orange as the dashboard */
+    --lost: #D3D8DE;       /* audience that left */
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--canvas); color: var(--ink);
+    font: 400 17px/1.65 var(--body); -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }
+
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 24px; }
+  .wide { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- hero: season ridges in parallax ---------- */
+  header.hero {
+    position: relative; height: 100vh; min-height: 640px; max-height: 1000px; overflow: hidden;
+    background: linear-gradient(180deg, var(--surface) 0%, var(--canvas) 70%);
+  }
+  .hero-copy { position: relative; z-index: 2; padding-top: 12vh; will-change: transform, opacity; }
+  .kicker { font: 500 13px/1.4 var(--mono); color: var(--ink-2); letter-spacing: .02em; margin: 0 0 18px; }
+  h1 {
+    font: 700 clamp(46px, 8.4vw, 96px)/0.96 var(--display); letter-spacing: -0.035em; margin: 0 0 20px;
+  }
+  h1 .two { color: var(--blue); }
+  .lede { font-size: 20px; line-height: 1.55; color: var(--ink-2); margin: 0; max-width: 560px; }
+  .byline { margin-top: 22px; font: 400 14px/1.5 var(--mono); color: var(--ink-2); }
+  .byline a { color: var(--ink); }
+
+  .ridge { position: absolute; left: -6%; bottom: -2px; width: 112%; height: 44%; will-change: transform; }  /* extra width hides the edges during the sideways drift */
+  .ridge path { stroke: none; }
+  .ridge text { font: 600 30px/1 var(--mono); }  /* viewBox units: ~17px on desktop, ~12px on phones */
+  .ridge.r1 { z-index: 1; }   /* season 1: far, light, tallest */
+  .ridge.r2 { z-index: 3; }   /* season 2: middle, passes in front of the title */
+  .ridge.r3 { z-index: 4; }   /* season 3: near, darkest, lowest */
+  .hero-key { font: 400 12px/1.5 var(--mono); color: var(--ink-2); margin-top: 14px; margin-bottom: 0; }
+  .scroll-cue { margin-top: 26px; font: 500 13px/1 var(--mono); color: var(--ink-2); }
+
+  /* ---------- sections ---------- */
+  section { padding: 64px 0 8px; }
+  .eyebrow { font: 500 13px/1.4 var(--mono); color: var(--blue); margin: 0 0 10px; }
+  h2 { font: 700 clamp(28px, 4.2vw, 40px)/1.12 var(--display); letter-spacing: -0.02em; margin: 0 0 16px; }
+  h3 { font: 600 17px/1.4 var(--body); margin: 0 0 6px; }
+  p { margin: 0 0 16px; }
+  .muted { color: var(--ink-2); }
+  .num { font-family: var(--mono); font-weight: 500; }
+
+  .card { background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 24px; }
+  .chart-card { margin: 28px 0 8px; }
+  .chart-title { font: 600 16px/1.35 var(--body); margin: 0 0 4px; }
+  .chart-sub { font-size: 14px; color: var(--ink-2); margin: 0 0 16px; }
+  .chart { display: block; max-width: 100%; overflow: visible; }
+  .chart text { font-family: var(--mono); font-size: 12px; fill: var(--ink-2); }
+  .chart .val { fill: var(--ink); font-weight: 500; }
+  .note { font-size: 13px; color: var(--ink-2); margin: 12px 0 0; }
+
+  .defs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 24px 0 8px; }
+  .def { padding: 18px 20px; }
+  .def .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+
+  /* funnel */
+  .funnel { margin: 28px 0 8px; display: grid; gap: 10px; }
+  .step { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .step .row { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; }
+  .step .row .num { color: var(--ink); }
+  .bar { height: 10px; border-radius: 5px; background: var(--hairline); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--blue); border-radius: 5px; transition: width 1.1s cubic-bezier(.2,.7,.2,1); }
+  .step.final .row { font-weight: 600; }
+
+  /* checks */
+  .checks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 28px 0 8px; }
+  .check p { font-size: 15px; margin: 0; color: var(--ink-2); }
+  .check .fix { margin-top: 10px; color: var(--ink); }
+
+  /* decision moments */
+  .decide { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 28px 0 8px; }
+  .moment { padding: 24px; border-top: 3px solid var(--blue); }
+  .moment .when { font: 500 13px/1.4 var(--mono); color: var(--blue); margin: 0 0 8px; }
+  .moment h3 { font: 700 22px/1.25 var(--display); letter-spacing: -0.01em; margin: 0 0 8px; }
+  .moment p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+  figure { margin: 28px 0 8px; }
+  figure img { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--hairline); }
+  figcaption { font-size: 13px; color: var(--ink-2); margin-top: 10px; }
+
+  footer { margin-top: 72px; padding: 28px 0 48px; border-top: 1px solid var(--hairline); font-size: 13px; color: var(--ink-2); }
+  footer p { margin: 0 0 6px; }
+
+  /* tooltip */
+  .tip {
+    position: fixed; pointer-events: none; z-index: 10; opacity: 0; transition: opacity .12s;
+    background: var(--ink); color: #fff; font: 400 13px/1.45 var(--mono);
+    padding: 8px 10px; border-radius: 8px; max-width: 260px;
+  }
+  .tip b { font-weight: 500; }
+
+  /* reveal on scroll */
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  @media (max-width: 760px) {
+    body { font-size: 16px; }
+    .hero-copy { padding-top: 9vh; }
+    h1 { font-size: clamp(40px, 11vw, 64px); }
+    .lede { font-size: 17px; }
+    .ridge { height: 30%; }
+    .scroll-cue { display: none; }
+    .defs, .checks, .decide { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 460px) {
+    .kicker { font-size: 12px; }
+    .hero-key { font-size: 11px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .reveal, .reveal.in { opacity: 1; transform: none; transition: none; }
+    .dot, .bar i { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero" id="hero">
+  <div class="hero-copy wrap" id="heroCopy">
+    <p class="kicker">A data case study · 12.9M IMDb records · SQL · Power BI</p>
+    <h1>The Second <span class="two">Season</span> Test</h1>
+    <p class="lede">When do TV series lose their audience, and what should a streaming platform watch before renewing one?</p>
+    <p class="byline">Gal Vainer · <a href="https://github.com/Galva2/second-season-test">Code and full write-up on GitHub</a></p>
+    <p class="scroll-cue" aria-hidden="true">Scroll ↓</p>
+  </div>
+  <!-- Three ridges. Peak heights = typical audience in seasons 1, 2 and 3 (100, 75.5, 66.2),
+       chained from the median changes −24.5% and −12.3%. Illustrative, not a chart. -->
+  <svg class="ridge r1" data-drift="-0.06" viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
+  <svg class="ridge r2" data-drift="0.04" viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
+  <svg class="ridge r3" data-drift="-0.025" viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
+</header>
+<p class="hero-key wrap">Each ridge is one season. Its height is the audience of a typical series: 100 in season 1, 75.5 in season 2, 66.2 in season 3.</p>
+
+<main>
+
+<section class="wrap reveal" id="question">
+  <p class="eyebrow">The question</p>
+  <h2>Renew it, or let it go?</h2>
+  <p>A streaming platform needs simple rules for renewing series. Viewing data is private, so I used IMDb: 12.9 million titles, narrowed to seasons with enough ratings to trust.</p>
+  <div class="defs">
+    <div class="card def"><h3><span class="swatch" style="background:var(--blue)"></span>Audience</h3><p class="muted" style="margin:0">IMDb votes per episode. A proxy, not viewers.</p></div>
+    <div class="card def"><h3><span class="swatch" style="background:var(--orange)"></span>Quality</h3><p class="muted" style="margin:0">Average IMDb episode rating.</p></div>
+  </div>
+  <div class="funnel" id="funnel">
+    <div class="step"><div class="row"><span>IMDb titles</span><span class="num">12,880,486</span></div><div class="bar"><i data-w="100"></i></div></div>
+    <div class="step"><div class="row"><span>TV series</span><span class="num">307,289</span></div><div class="bar"><i data-w="62"></i></div></div>
+    <div class="step"><div class="row"><span>Scripted series</span><span class="num">167,650</span></div><div class="bar"><i data-w="50"></i></div></div>
+    <div class="step"><div class="row"><span>With numbered seasons</span><span class="num">105,421</span></div><div class="bar"><i data-w="40"></i></div></div>
+    <div class="step final"><div class="row"><span>Series with reliable seasons</span><span class="num">11,026</span></div><div class="bar"><i data-w="22"></i></div></div>
+  </div>
+  <p class="note">Bars not to scale. Every filter is in the <a href="https://github.com/Galva2/second-season-test/blob/main/notes/decisions.md">decision log</a>.</p>
+</section>
+
+<section class="wide reveal" id="finding-1">
+  <div class="wrap" style="padding:0">
+    <p class="eyebrow">Where the audience goes</p>
+    <h2>The biggest drop comes at season 2</h2>
+    <p>The median series loses 24.5% of its audience at season 2. After that, losses shrink to single digits.</p>
+  </div>
+  <div class="card chart-card">
+    <p class="chart-title">Change in audience vs the previous season</p>
+    <p class="chart-sub">Line: median series. Band: middle half of series.</p>
+    <svg class="chart" id="curve" role="img" aria-label="Median audience change by season transition: season 1 to 2, minus 24.5 percent; 2 to 3, minus 12.3; 3 to 4, minus 8.7; 4 to 5, minus 6.4; then between minus 2.6 and minus 5.8."></svg>
+  </div>
+</section>
+
+<section class="wide reveal" id="finding-2">
+  <div class="wrap" style="padding:0">
+    <p class="eyebrow">Before season 2</p>
+    <h2>A strong first season helps, but a top rating is no guarantee</h2>
+    <p>Renewal peaks at a season 1 rating of 7.5 to 8.0, then falls. Very high ratings partly reflect small fan bases.</p>
+  </div>
+  <div class="card chart-card">
+    <p class="chart-title">Series renewed for season 2, by season 1 rating</p>
+    <p class="chart-sub">8,252 series that have already ended.</p>
+    <svg class="chart" id="pilot" role="img" aria-label="Renewal for season 2 by season 1 rating: below 6.5, 35.2 percent; 6.5 to 7.0, 42.8; 7.0 to 7.5, 55.3; 7.5 to 8.0, 63.9; 8.0 to 8.5, 56.5; 8.5 and above, 38.5. All ended series: 53.8."></svg>
+    <p class="note">The pilot episode alone shows the same shape.</p>
+  </div>
+</section>
+
+<section class="wide reveal" id="finding-3">
+  <div class="wrap" style="padding:0">
+    <p class="eyebrow">After season 2</p>
+    <h2>Watch the audience, not the rating</h2>
+    <p>Series that lost the most audience in season 2 were renewed 44% of the time, against 72% for the rest. Rating change barely mattered.</p>
+  </div>
+  <div class="card chart-card">
+    <p class="chart-title">Series renewed for season 3</p>
+    <p class="chart-sub">3,801 ended series, split into thirds by the change from season 1 to 2.</p>
+    <svg class="chart" id="avq" role="img" aria-label="Renewal for season 3. By audience change: biggest drop 44.0 percent, middle 71.7, smallest drop 72.9. By rating change: 58.6, 68.3, 61.7."></svg>
+  </div>
+</section>
+
+<section class="wrap reveal" id="checks">
+  <p class="eyebrow">How I checked myself</p>
+  <h2>Three ways this data could have fooled me</h2>
+  <div class="checks">
+    <div class="card check"><h3>Votes keep piling up</h3><p>Old seasons had more years to collect votes.</p><p class="fix">Re-ran on older seasons and by era. The pattern held.</p></div>
+    <div class="card check"><h3>Only survivors reach season 6</h3><p>Late seasons include only successful series.</p><p class="fix">Followed one fixed group of 1,025 series.</p></div>
+    <div class="card check"><h3>Running series have no ending yet</h3><p>Two seasons today might be ten later.</p><p class="fix">Renewal questions use ended series only.</p></div>
+  </div>
+</section>
+
+<section class="wide reveal" id="rules">
+  <div class="wrap" style="padding:0">
+    <p class="eyebrow">Recommendations</p>
+    <h2>Two red flags before renewing</h2>
+  </div>
+  <div class="decide">
+    <div class="card moment">
+      <p class="when">After season 1</p>
+      <h3>Season 1 rated below 7.0</h3>
+      <p>Only 35–43% got a season 2, against 63.9% at 7.5–8.0.</p>
+    </div>
+    <div class="card moment">
+      <p class="when">After season 2</p>
+      <h3>Season 2 lost over 30% of the audience</h3>
+      <p>Only 44% got a season 3, against about 72% of the rest.</p>
+    </div>
+  </div>
+  <p class="note wrap" style="padding:0">Patterns from past series, not causes. IMDb votes measure engagement, not audience size.</p>
+</section>
+
+<section class="wide reveal" id="dashboard">
+  <div class="wrap" style="padding:0">
+    <p class="eyebrow">The dashboard</p>
+    <h2>The same findings, built for exploring</h2>
+    <p>Power BI, star schema, DAX measures, filters by genre and years.</p>
+  </div>
+  <figure>
+    <img src="dashboard.png" alt="Power BI dashboard with four KPI cards (typical audience drop in season 2 −24.5%, series that lost audience 96.2%, renewed for season 2 53.8%, 4,552 series analyzed) and four charts: audience change by season transition, renewal by season 1 rating, audience vs rating change as a renewal signal, and audience lost by genre." loading="lazy">
+    <figcaption>Genre values here are not adjusted for release period.</figcaption>
+  </figure>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <p><b>Built with</b> SQL (DuckDB, MySQL 8), Python and Power BI.</p>
+  <p><a href="https://github.com/Galva2/second-season-test/tree/main/sql/mysql">Read the SQL</a> · <a href="https://github.com/Galva2/second-season-test/blob/main/notes/decisions.md">Decision log</a> · <a href="https://github.com/Galva2/second-season-test/blob/main/findings_memo.md">Leadership memo</a> · <a href="https://github.com/Galva2/second-season-test">Full project on GitHub</a></p>
+  <p>Gal Vainer</p>
+  <p>Data: <a href="https://developer.imdb.com/non-commercial-datasets/">IMDb non-commercial datasets</a>, information courtesy of IMDb, used for personal, non-commercial purposes. Scripted TV series only.</p>
+  <p>Built with help from Claude (Anthropic) as a coding assistant.</p>
+</footer>
+
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+// All values come from the committed summary tables in outputs/powerbi/ (same numbers as the README).
+const DATA = {
+  curve: [
+    { t: "1→2", n: 4518, med: -24.5, p25: -35.7, p75: -16.2 },
+    { t: "2→3", n: 2582, med: -12.3, p25: -20.7, p75: -6.2 },
+    { t: "3→4", n: 1602, med: -8.7,  p25: -16.3, p75: -3.2 },
+    { t: "4→5", n: 1046, med: -6.4,  p25: -12.1, p75: -1.1 },
+    { t: "5→6", n: 698,  med: -5.8,  p25: -11.1, p75: -0.7 },
+    { t: "6→7", n: 473,  med: -5.1,  p25: -10.7, p75: -0.7 },
+    { t: "7→8", n: 331,  med: -2.6,  p25: -8.4,  p75: 2.4 },
+    { t: "8→9", n: 235,  med: -4.5,  p25: -9.0,  p75: 0.0 }
+  ],
+  pilot: [
+    { b: "< 6.5", v: 35.2, n: 687 },   { b: "6.5–7.0", v: 42.8, n: 881 },
+    { b: "7.0–7.5", v: 55.3, n: 2021 }, { b: "7.5–8.0", v: 63.9, n: 2546 },
+    { b: "8.0–8.5", v: 56.5, n: 1454 }, { b: "8.5+", v: 38.5, n: 663 }
+  ],
+  pilotAll: 53.8,
+  avq: [
+    { g: "Biggest drop", a: 44.0, q: 58.6 },
+    { g: "Middle", a: 71.7, q: 68.3 },
+    { g: "Smallest drop", a: 72.9, q: 61.7 }
+  ],
+};
+
+const NS = "http://www.w3.org/2000/svg";
+const css = getComputedStyle(document.documentElement);
+const C = name => css.getPropertyValue(name).trim();
+const el = (tag, attrs = {}, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const text = (parent, x, y, str, attrs = {}) => { const t = el("text", { x, y, ...attrs }, parent); t.textContent = str; return t; };
+const fmt = v => (v > 0 ? "+" : "") + v.toFixed(1) + "%";
+
+// tooltip shared by all charts
+const tip = document.getElementById("tip");
+addEventListener("scroll", () => { tip.style.opacity = 0; }, { passive: true });
+function hover(target, html) {
+  const show = e => { tip.innerHTML = html; tip.style.opacity = 1; move(e); };
+  const move = e => {
+    const x = (e.clientX ?? target.getBoundingClientRect().left) + 14;
+    const y = (e.clientY ?? target.getBoundingClientRect().top) + 14;
+    tip.style.left = Math.min(x, innerWidth - tip.offsetWidth - 8) + "px";
+    tip.style.top = Math.min(y, innerHeight - tip.offsetHeight - 8) + "px";
+  };
+  const hide = () => { tip.style.opacity = 0; };
+  target.addEventListener("mouseenter", show);
+  target.addEventListener("mousemove", move);
+  target.addEventListener("mouseleave", hide);
+  target.setAttribute("tabindex", "0");
+  target.addEventListener("focus", e => { const r = target.getBoundingClientRect(); show({ clientX: r.right, clientY: r.top }); });
+  target.addEventListener("blur", hide);
+}
+
+// Charts are drawn at the container's real width, so text stays 12px on any screen.
+function prep(id, H) {
+  const svg = document.getElementById(id);
+  const W = Math.max(300, Math.round(svg.parentElement.clientWidth - 48));
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  svg.innerHTML = "";
+  return { svg, W, narrow: W < 560 };
+}
+
+// ---------- chart 1: retention curve with interquartile band ----------
+function drawCurve() {
+  const d = DATA.curve, H = 300, { svg, W, narrow } = prep("curve", H);
+  const m = { l: 46, r: 16, t: 24, b: 40 };
+  const x = i => m.l + i * (W - m.l - m.r) / (d.length - 1);
+  const y = v => m.t + (5 - v) * (H - m.t - m.b) / 45;          // domain +5 .. −40
+  for (const g of [0, -10, -20, -30, -40]) {
+    el("line", { x1: m.l, x2: W - m.r, y1: y(g), y2: y(g), stroke: g === 0 ? C("--ink-2") : C("--hairline"), "stroke-opacity": g === 0 ? .5 : 1 }, svg);
+    text(svg, m.l - 8, y(g) + 4, g + "%", { "text-anchor": "end" });
+  }
+  const band = d.map((p, i) => `${x(i)},${y(p.p75)}`).concat(d.slice().reverse().map((p, i) => `${x(d.length - 1 - i)},${y(p.p25)}`));
+  el("polygon", { points: band.join(" "), fill: C("--blue"), "fill-opacity": .14 }, svg);
+  el("polyline", { points: d.map((p, i) => `${x(i)},${y(p.med)}`).join(" "), fill: "none", stroke: C("--blue"), "stroke-width": 2.5, "stroke-linejoin": "round" }, svg);
+  const step = (W - m.l - m.r) / (d.length - 1);
+  d.forEach((p, i) => {
+    if (!narrow || i % 2 === 0) text(svg, x(i), H - m.b + 22, p.t, { "text-anchor": "middle" });
+    el("circle", { cx: x(i), cy: y(p.med), r: 5, fill: C("--blue"), stroke: C("--surface"), "stroke-width": 2 }, svg);
+    if (i < (narrow ? 2 : 4)) text(svg, x(i) + (i === 0 ? 8 : 0), y(p.med) - 12, fmt(p.med), { "text-anchor": i === 0 ? "start" : "middle", class: "val" });
+    const hit = el("rect", { x: x(i) - step / 2, y: m.t, width: step, height: H - m.t - m.b, fill: "transparent" }, svg);
+    hover(hit, `<b>Season ${p.t}</b><br>Median change: ${fmt(p.med)}<br>Middle half: ${fmt(p.p25)} to ${fmt(p.p75)}<br>Series pairs: ${p.n.toLocaleString()}`);
+  });
+}
+
+// ---------- chart 3: renewal by season 1 rating ----------
+function drawPilot() {
+  const d = DATA.pilot, H = 300, { svg, W, narrow } = prep("pilot", H);
+  const m = { l: 40, r: 8, t: 34, b: 50 };
+  const slot = (W - m.l - m.r) / d.length, bw = slot * .6;
+  const y = v => m.t + (80 - v) * (H - m.t - m.b) / 80;
+  for (const g of [0, 20, 40, 60, 80]) {
+    el("line", { x1: m.l, x2: W - m.r, y1: y(g), y2: y(g), stroke: C("--hairline") }, svg);
+    text(svg, m.l - 8, y(g) + 4, g + "%", { "text-anchor": "end" });
+  }
+  const ya = y(DATA.pilotAll);
+  el("line", { x1: m.l, x2: W - m.r, y1: ya, y2: ya, stroke: C("--ink"), "stroke-opacity": .55 }, svg);
+  text(svg, m.l, 14, `Line: all ended series, ${DATA.pilotAll}%`);
+  const peak = Math.max(...d.map(p => p.v));
+  d.forEach((p, i) => {
+    const cx = m.l + slot * i + slot / 2;
+    const bar = el("rect", { x: cx - bw / 2, y: y(p.v), width: bw, height: y(0) - y(p.v), rx: 4, fill: C("--blue"), "fill-opacity": p.v === peak ? 1 : .45 }, svg);
+    text(svg, cx, y(p.v) - 7, narrow ? p.v.toFixed(0) : p.v.toFixed(1) + "%", { "text-anchor": "middle", class: "val" });
+    const short = p.b.replace(/\.0/g, "").replace("< ", "<");   // "7.0–7.5" -> "7–7.5" on phones
+    text(svg, cx, H - m.b + 20, narrow ? short : p.b, { "text-anchor": "middle", "font-size": narrow ? 10 : 12 });
+    text(svg, cx, H - m.b + 36, (narrow ? "" : "n=") + p.n.toLocaleString(), { "text-anchor": "middle", "font-size": narrow ? 10 : 11 });
+    hover(bar, `<b>Season 1 rating ${p.b}</b><br>Got a season 2: ${p.v.toFixed(1)}%<br>Series: ${p.n.toLocaleString()}`);
+  });
+}
+
+// ---------- chart 4: audience vs quality ----------
+function drawAvq() {
+  const d = DATA.avq, H = 300, { svg, W, narrow } = prep("avq", H);
+  const m = { l: 40, r: 8, t: 44, b: 34 };
+  const slot = (W - m.l - m.r) / d.length, bw = Math.min(slot * .3, 90);
+  const y = v => m.t + (80 - v) * (H - m.t - m.b) / 80;
+  for (const g of [0, 20, 40, 60, 80]) {
+    el("line", { x1: m.l, x2: W - m.r, y1: y(g), y2: y(g), stroke: C("--hairline") }, svg);
+    text(svg, m.l - 8, y(g) + 4, g + "%", { "text-anchor": "end" });
+  }
+  el("circle", { cx: m.l + 6, cy: 12, r: 6, fill: C("--blue") }, svg); text(svg, m.l + 18, 16, "Audience change");
+  el("circle", { cx: m.l + 160, cy: 12, r: 6, fill: C("--orange") }, svg); text(svg, m.l + 172, 16, "Rating change");
+  d.forEach((p, i) => {
+    const cx = m.l + slot * i + slot / 2;
+    [["a", "--blue", -1, "Audience change"], ["q", "--orange", 1, "Rating change"]].forEach(([k, col, side, name]) => {
+      const bx = cx + side * (bw / 2 + 2) - bw / 2;
+      const bar = el("rect", { x: bx, y: y(p[k]), width: bw, height: y(0) - y(p[k]), rx: 4, fill: C(col) }, svg);
+      text(svg, bx + bw / 2, y(p[k]) - 7, narrow ? p[k].toFixed(0) : p[k].toFixed(1) + "%", { "text-anchor": "middle", class: "val" });
+      hover(bar, `<b>${name}: ${p.g.toLowerCase()}</b><br>Got a season 3: ${p[k].toFixed(1)}%<br>1,267 series in this third`);
+    });
+    text(svg, cx, H - m.b + 22, p.g, { "text-anchor": "middle" });
+  });
+}
+
+function drawAll() { drawCurve(); drawPilot(); drawAvq(); }
+let resizeTimer, lastW = innerWidth;
+addEventListener("resize", () => {
+  if (innerWidth === lastW) return;           // ignore mobile address-bar height changes
+  lastW = innerWidth;
+  clearTimeout(resizeTimer); resizeTimer = setTimeout(drawAll, 150);
+});
+
+// ---------- signature: season ridges (mountain parallax) ----------
+// Peak height of each ridge = typical audience in that season: 100, then −24.5%, then −12.3%.
+const S1 = 100, S2 = +(S1 * (1 - 0.245)).toFixed(1), S3 = +(S2 * (1 - 0.123)).toFixed(1);
+const RIDGES = [
+  // Peaks are spread apart (x = 420, 720, 1020) and stay visible when phones crop the sides.
+  { sel: ".r1", peak: S1, fill: "#CFE5FF", label: `Season 1 · ${S1}`, px: 720,
+    bumps: [[0, .52], [220, .62], [460, .56], [720, 1], [960, .66], [1200, .58], [1440, .50]] },
+  { sel: ".r2", peak: S2, fill: "#5FAEFF", label: `Season 2 · ${S2}`, px: 420,
+    bumps: [[0, .60], [200, .74], [420, 1], [640, .62], [880, .70], [1160, .58], [1440, .66]] },
+  { sel: ".r3", peak: S3, fill: "#118DFF", label: `Season 3 · ${S3}`, px: 1020,
+    bumps: [[0, .70], [240, .80], [520, .64], [780, .72], [1020, 1], [1260, .76], [1440, .68]] }
+];
+const MAX_H = 480; // px in the 600-high viewBox for an audience of 100 (room above for the label)
+function ridgePath(bumps, peak) {
+  const top = MAX_H * peak / 100;
+  const pts = bumps.map(([x, f]) => [x, 600 - top * f]);
+  let d = `M0,600 L${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length; i++) {               // smooth curve through the ridge points
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], mx = (x0 + x1) / 2;
+    d += ` C${mx},${y0} ${mx},${y1} ${x1},${y1}`;
+  }
+  return d + " L1440,600 Z";
+}
+RIDGES.forEach(r => {
+  const svg = document.querySelector(r.sel);
+  el("path", { d: ridgePath(r.bumps, r.peak), fill: r.fill }, svg);
+  const py = 600 - MAX_H * r.peak / 100;
+  el("circle", { cx: r.px, cy: py, r: 7, fill: "#1F2328" }, svg);            // marks the peak
+  text(svg, r.px, py - 22, r.label, { "text-anchor": "middle", fill: "#1F2328" });
+});
+
+// ---------- scroll behaviour ----------
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const hero = document.getElementById("hero"), heroCopy = document.getElementById("heroCopy");
+const layers = [...document.querySelectorAll(".ridge")];
+if (!reduced) {
+  let ticking = false;
+  const onScroll = () => {
+    const y = Math.min(scrollY, hero.offsetHeight);
+    // Ridge heights are data, so all ridges move together vertically and their heights stay true.
+    // Depth comes from the title moving at its own speed and from a small sideways drift per ridge.
+    layers.forEach(l => l.style.transform = `translate3d(${y * parseFloat(l.dataset.drift)}px, ${y * 0.12}px, 0)`);
+    heroCopy.style.transform = `translate3d(0, ${y * 0.45}px, 0)`;
+    heroCopy.style.opacity = Math.max(0, 1 - y / (hero.offsetHeight * 0.65));
+    ticking = false;
+  };
+  addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+  onScroll();
+}
+
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    e.target.classList.add("in");
+    if (e.target.id === "question") document.querySelectorAll("#funnel i").forEach(b => b.style.width = b.dataset.w + "%");
+    io.unobserve(e.target);
+  }
+}, { threshold: 0.2 });
+document.querySelectorAll(".reveal").forEach(s => reduced ? (s.classList.add("in")) : io.observe(s));
+if (reduced) document.querySelectorAll("#funnel i").forEach(b => b.style.width = b.dataset.w + "%");
+
+drawAll();
+</script>
+</body>
+</html>
