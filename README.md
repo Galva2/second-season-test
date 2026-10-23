@@ -2,6 +2,8 @@
 
 **A Business Analyst case study on 12M+ IMDb records.** Each TV series is treated as a product and each season as a cohort. IMDb votes per episode serve as an (imperfect) audience proxy and ratings as a quality proxy.
 
+**[View the project website →](https://galva2.github.io/second-season-test/)** A two-minute visual summary of the findings.
+
 ## Key findings
 
 1. **Season 2 is where the audience is lost.** The median series loses **24.5%** of its votes per episode from season 1 to season 2, and later seasons lose far less. In a fixed group of 1,025 long-running series, **70%** had their single biggest drop at season 1 → 2 (25% would be expected at random).
