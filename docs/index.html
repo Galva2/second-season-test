@@ -39,7 +39,7 @@
     position: relative; height: 100vh; min-height: 640px; max-height: 1000px; overflow: hidden;
     background: linear-gradient(180deg, var(--surface) 0%, var(--canvas) 70%);
   }
-  .hero-copy { position: relative; z-index: 2; padding-top: 12vh; will-change: transform, opacity; }
+  .hero-copy { position: relative; z-index: 2; padding-top: 9vh; will-change: transform, opacity; }
   .kicker { font: 500 13px/1.4 var(--mono); color: var(--ink-2); letter-spacing: .02em; margin: 0 0 18px; }
   h1 {
     font: 700 clamp(46px, 8.4vw, 96px)/0.96 var(--display); letter-spacing: -0.035em; margin: 0 0 20px;
@@ -49,9 +49,16 @@
   .byline { margin-top: 22px; font: 400 14px/1.5 var(--mono); color: var(--ink-2); }
   .byline a { color: var(--ink); }
 
-  .ridge { position: absolute; left: -6%; bottom: -2px; width: 112%; height: 44%; will-change: transform; }  /* extra width hides the edges during the sideways drift */
+  /* The SVG stretches to the box (preserveAspectRatio none). All ridges share the same box
+     height, so their heights keep the same ratio on every screen and peaks are never cropped. */
+  .ridge { position: absolute; left: -6%; bottom: -2px; width: 112%; height: 36%; will-change: transform; }  /* extra width hides the edges during the sideways drift */
+  .ridge svg { display: block; width: 100%; height: 100%; }
+  .peak-dot { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: var(--ink); transform: translate(-50%, 50%); }
+  .peak-label {
+    position: absolute; transform: translate(-50%, -14px); white-space: nowrap;
+    font: 600 14px/1 var(--mono); color: var(--ink);
+  }
   .ridge path { stroke: none; }
-  .ridge text { font: 600 30px/1 var(--mono); }  /* viewBox units: ~17px on desktop, ~12px on phones */
   .ridge.r1 { z-index: 1; }   /* season 1: far, light, tallest */
   .ridge.r2 { z-index: 3; }   /* season 2: middle, passes in front of the title */
   .ridge.r3 { z-index: 4; }   /* season 3: near, darkest, lowest */
@@ -125,13 +132,20 @@
     .hero-copy { padding-top: 9vh; }
     h1 { font-size: clamp(40px, 11vw, 64px); }
     .lede { font-size: 17px; }
-    .ridge { height: 30%; }
+    .ridge { height: 28%; }
+    .peak-label { font-size: 12px; }
     .scroll-cue { display: none; }
     .defs, .checks, .decide { grid-template-columns: 1fr; }
   }
   @media (max-width: 460px) {
     .kicker { font-size: 12px; }
     .hero-key { font-size: 11px; }
+  }
+  /* short laptop screens (e.g. 1366x657): give the title room above the ridges */
+  @media (max-height: 760px) and (min-width: 761px) {
+    .hero-copy { padding-top: 6vh; }
+    .scroll-cue { display: none; }
+    .ridge { height: 30%; }
   }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
@@ -152,9 +166,9 @@
   </div>
   <!-- Three ridges. Peak heights = typical audience in seasons 1, 2 and 3 (100, 75.5, 66.2),
        chained from the median changes −24.5% and −12.3%. Illustrative, not a chart. -->
-  <svg class="ridge r1" data-drift="-0.06" viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
-  <svg class="ridge r2" data-drift="0.04" viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
-  <svg class="ridge r3" data-drift="-0.025" viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
+  <div class="ridge r1" data-drift="-0.06" aria-hidden="true"><svg viewBox="0 0 1440 600" preserveAspectRatio="none"></svg><span class="peak-dot"></span><span class="peak-label"></span></div>
+  <div class="ridge r2" data-drift="0.04" aria-hidden="true"><svg viewBox="0 0 1440 600" preserveAspectRatio="none"></svg><span class="peak-dot"></span><span class="peak-label"></span></div>
+  <div class="ridge r3" data-drift="-0.025" aria-hidden="true"><svg viewBox="0 0 1440 600" preserveAspectRatio="none"></svg><span class="peak-dot"></span><span class="peak-label"></span></div>
 </header>
 <p class="hero-key wrap">Each ridge is one season. Its height is the audience of a typical series: 100 in season 1, 75.5 in season 2, 66.2 in season 3.</p>
 
@@ -444,11 +458,14 @@ function ridgePath(bumps, peak) {
   return d + " L1440,600 Z";
 }
 RIDGES.forEach(r => {
-  const svg = document.querySelector(r.sel);
-  el("path", { d: ridgePath(r.bumps, r.peak), fill: r.fill }, svg);
-  const py = 600 - MAX_H * r.peak / 100;
-  el("circle", { cx: r.px, cy: py, r: 7, fill: "#1F2328" }, svg);            // marks the peak
-  text(svg, r.px, py - 22, r.label, { "text-anchor": "middle", fill: "#1F2328" });
+  const box = document.querySelector(r.sel);
+  el("path", { d: ridgePath(r.bumps, r.peak), fill: r.fill }, box.querySelector("svg"));
+  const left = (r.px / 1440 * 100) + "%";
+  const bottom = (MAX_H * r.peak / 100 / 600 * 100) + "%";      // peak height as a share of the box
+  const dot = box.querySelector(".peak-dot"), label = box.querySelector(".peak-label");
+  dot.style.left = left; dot.style.bottom = bottom;
+  label.style.left = left; label.style.bottom = bottom;
+  label.textContent = r.label;
 });
 
 // ---------- scroll behaviour ----------
